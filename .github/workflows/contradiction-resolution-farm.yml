@@ -1,0 +1,79 @@
+name: CEREBRON Farm 38 Contradiction Resolution
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agents:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - {role: SOURCE_CONTRADICTION_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: MODEL_CONTRADICTION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: TEMPORAL_CONTRADICTION_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: SCALE_CONTRADICTION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: DEFINITION_CONTRADICTION_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: CAUSAL_CONTRADICTION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: STATE_CONTRADICTION_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: EVIDENCE_CONTRADICTION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: ASSUMPTION_MISMATCH_ANALYST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: TERMINOLOGY_NORMALIZATION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: PROVENANCE_CONFLICT_ANALYST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: CROSS_MODEL_RECONCILIATION_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: EXPERIMENT_DISCRIMINATION_DESIGNER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: LOGICAL_CONSISTENCY_ANALYST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: BOUNDARY_CONDITION_RECONCILER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: UNCERTAINTY_PRESERVATION_AUDITOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: RED_TEAM_FALSE_RECONCILIATION, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: INDEPENDENT_CONTRADICTION_REPLICATOR, model: huggingface-projects/gemma-2-9b-it}
+          - {role: RESOLUTION_EVIDENCE_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: OMEGA_CONTRADICTION_RESOLUTION_JUDGE, model: huggingface-projects/gemma-2-9b-it}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q hf-gradio
+      - name: Run real external model role
+        env:
+          ROLE: ${{ matrix.role }}
+          MODEL: ${{ matrix.model }}
+        run: python worker/agent.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: farm38-${{ matrix.role }}
+          path: results/*.json
+
+  omega:
+    needs: agents
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farm38-*
+          path: collected
+          merge-multiple: true
+      - name: Build Omega packet
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          rows=[]
+          for p in glob.glob('collected/*.json'):
+              try: rows.append(json.load(open(p,encoding='utf-8')))
+              except Exception as e: rows.append({'file':p,'status':'ARTIFACT_PARSE_FAILED','error':repr(e)})
+          ok=[r for r in rows if r.get('inference_success') is True and r.get('status')=='UNREVIEWED_EXTERNAL_AGENT_OUTPUT']
+          packet={'farm':38,'name':'Contradiction Resolution','roles_expected':20,'roles_returned':len(rows),'successful_external_ai_calls':len(ok),'failed_external_ai_calls':len(rows)-len(ok),'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT','results':rows}
+          os.makedirs('omega',exist_ok=True)
+          json.dump(packet,open('omega/farm38-omega.json','w',encoding='utf-8'),ensure_ascii=False,indent=2)
+          print(json.dumps({k:v for k,v in packet.items() if k!='results'},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contradiction-resolution-farm-38-omega-packet
+          path: omega/farm38-omega.json
