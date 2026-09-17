@@ -1,10 +1,12 @@
 import json, os, subprocess, hashlib
 from pathlib import Path
+from registry_loader import load_registry
 
 ROLE=os.getenv('ROLE','UNKNOWN_ROLE')
 MODEL=os.getenv('MODEL','huggingface-projects/llama-3.2-3B-Instruct')
 mission=Path('MISSION.md').read_text(encoding='utf-8')
-prompt=f'''You are {ROLE} in CEREBRON Omega Farm 38 Contradiction Resolution.\n\n{mission}\n\nAnalyze rigorously. Do not erase disagreements by averaging. Distinguish genuine contradiction from differences in definition, scale, time, state, evidence, or model assumptions.'''
+registry_context, registry_state = load_registry(['constitution','macrograins','disciplines','keys','banks'])
+prompt=f'''You are {ROLE} in CEREBRON Omega Farm 38 Contradiction Resolution.\n\n{mission}\n\nShared CEREBRON registry context (guidance only; not self-certifying evidence):\n{registry_context}\n\nAnalyze rigorously. Do not erase disagreements by averaging. Distinguish genuine contradiction from differences in definition, scale, time, state, evidence, or model assumptions.'''
 PREFERRED=['/generate','/chat','/predict','/respond','/infer','/run']
 
 def run(cmd,timeout=240): return subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
@@ -33,7 +35,7 @@ def extract(raw):
  except: pass
  return raw
 
-out={'role':ROLE,'model':MODEL,'inference_success':False,'status':'EXTERNAL_INFERENCE_FAILED'}
+out={'farm':38,'role':ROLE,'model':MODEL,'inference_success':False,'status':'EXTERNAL_INFERENCE_FAILED','registry_runtime':registry_state}
 try:
  info=run(['hf-gradio','info',MODEL],120)
  if info.returncode!=0: raise RuntimeError(info.stderr or info.stdout)
@@ -52,4 +54,4 @@ try:
 except Exception as e: out['error']=repr(e)
 Path('results').mkdir(exist_ok=True)
 Path(f'results/{ROLE}.json').write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
-print(json.dumps({'role':ROLE,'status':out['status'],'inference_success':out['inference_success']},ensure_ascii=False))
+print(json.dumps({'role':ROLE,'status':out['status'],'inference_success':out['inference_success'],'registry_runtime':registry_state},ensure_ascii=False))
